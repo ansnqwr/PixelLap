@@ -1,2 +1,2 @@
-# PixelLap
+# PixelLab
 
