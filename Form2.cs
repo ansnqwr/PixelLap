@@ -22,7 +22,6 @@ namespace PixelLab
             CMYK
         }
 
-        // المكونات
         private Panel mainPanel;
         private PictureBox pictureBox;
         private FlowLayoutPanel buttonPanel;
@@ -30,11 +29,10 @@ namespace PixelLab
         private ToolStripStatusLabel infoLabel;
         private ToolStripStatusLabel pixelInfoLabel;
 
-        // بيانات الصورة
         private Bitmap originalBitmap;
         private Bitmap currentBitmap;
         private string currentFilePath = "";
-        // واجهة التحكم بأنظمة الألوان
+
         private ComboBox colorSpaceCombo;
         private TrackBar[] channelSliders;
         private NumericUpDown[] channelValues;
@@ -42,15 +40,14 @@ namespace PixelLab
         private CheckBox[] showChannelOnlyCheckBoxes;
         private Panel controlPanel;
         private Label[] channelLabels;
-        //private Button applyButton;
+       
 
-        // بيانات العمل
         private ColorSpace currentColorSpace = ColorSpace.RGB;
-        private double[,,] currentChannels; // [width, height, channelIndex] للتخزين المؤقت
+        private double[,,] currentChannels; 
         private int channelCount = 3;
         private bool[] channelDisabled;
         private bool[] showChannelOnly;
-        private float[] channelMultipliers; // للتعديل
+        private float[] channelMultipliers; 
         public Form2()
         {
             InitializeComponent();
@@ -67,7 +64,6 @@ namespace PixelLab
             this.BackColor = Color.FromArgb(45, 45, 48);
             this.DoubleBuffered = true;
 
-            // لوحة الأزرار (FlowLayout)
             buttonPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -85,7 +81,6 @@ namespace PixelLab
 
 
 
-            // لوحة التحكم بأنظمة الألوان (على اليمين)
             controlPanel = new Panel
             {
                 Dock = DockStyle.Right,
@@ -99,7 +94,6 @@ namespace PixelLab
 
 
 
-            // لوحة تمرير تحتوي على PictureBox
             mainPanel = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -116,7 +110,6 @@ namespace PixelLab
             mainPanel.Controls.Add(pictureBox);
             Controls.Add(mainPanel);
 
-            // شريط الحالة
             statusStrip = new StatusStrip();
             infoLabel = new ToolStripStatusLabel("لا توجد صورة");
             pixelInfoLabel = new ToolStripStatusLabel("الماوس خارج الصورة");
@@ -129,12 +122,11 @@ namespace PixelLab
         {
             int yOffset = 10;
 
-            // عنوان
+            
             Label title = new Label { Text = "🎨 التحكم بأنظمة الألوان", ForeColor = Color.White, Font = new Font("Segoe UI", 12, FontStyle.Bold), Top = yOffset, Left = 10, AutoSize = true };
             controlPanel.Controls.Add(title);
             yOffset += 35;
 
-            // اختيار النظام اللوني
             Label spaceLabel = new Label { Text = "النظام اللوني:", ForeColor = Color.White, Top = yOffset, Left = 10, AutoSize = true };
             controlPanel.Controls.Add(spaceLabel);
             colorSpaceCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Top = yOffset, Left = 110, Width = 150 };
@@ -144,7 +136,6 @@ namespace PixelLab
             controlPanel.Controls.Add(colorSpaceCombo);
             yOffset += 35;
 
-            // مصفوفات التحكم
             channelSliders = new TrackBar[5];
             channelValues = new NumericUpDown[5];
             disableButtons = new Button[5];
@@ -178,33 +169,54 @@ namespace PixelLab
 
                 yOffset += 65;
             }
-            // (ملاحظة: لا يوجد applyButton هنا نهائياً)
-
-            // زر تطبيق التغييرات (يمكن تحديث تلقائي لكن هذا يدوي للتحكم)
-            //applyButton = new Button { Text = "تطبيق التعديلات", FlatStyle = FlatStyle.Flat, BackColor = Color.SteelBlue, ForeColor = Color.White, Top = yOffset, Left = 50, Width = 180, Height = 40 };
-            //applyButton.Click += (s, e) => RebuildImageFromChannels();
-            //controlPanel.Controls.Add(applyButton);
-
-            // إخفاء القنوات الزائدة في البداية (RGB = 3 قنوات)
+          
             UpdateChannelVisibility();
         }
+
+        private void UpdateChannelVisibility()
+        {
+            channelCount = (currentColorSpace == ColorSpace.CMYK || currentColorSpace == ColorSpace.LAB) ? 4 : 3;
+            for (int i = 0; i < 5; i++)
+            {
+                bool visible = i < channelCount;
+                channelLabels[i].Visible = visible;
+                channelSliders[i].Visible = visible;
+                channelValues[i].Visible = visible;
+                disableButtons[i].Visible = visible;
+                showChannelOnlyCheckBoxes[i].Visible = visible;
+            }
+            string[] names = GetChannelNames();
+            for (int i = 0; i < channelCount; i++)
+                channelLabels[i].Text = names[i] + ":";
+        }
+
+        private string[] GetChannelNames()
+        {
+            switch (currentColorSpace)
+            {
+                case ColorSpace.RGB: return new[] { "الأحمر (R)", "الأخضر (G)", "الأزرق (B)" };
+                case ColorSpace.HSV: return new[] { "Hue (صبغة)", "Saturation (تشبع)", "Value (قيمة)" };
+                case ColorSpace.YUV: return new[] { "Y (لومينانس)", "U (كرومينانس)", "V (كرومينانس)" };
+                case ColorSpace.YCbCr: return new[] { "Y (لومينانس)", "Cb (فرق الأزرق)", "Cr (فرق الأحمر)" };
+                case ColorSpace.LAB: return new[] { "L* (إضاءة)", "a* (أخضر-أحمر)", "b* (أزرق-أصفر)", "اختياري" };
+                case ColorSpace.CMYK: return new[] { "C (سيان)", "M (ماجنتا)", "Y (أصفر)", "K (أسود)" };
+                default: return new[] { "قناة 1", "قناة 2", "قناة 3" };
+            }
+        }
+
         private void AddButtons()
         {
             AddButton("🌐 عرض فضاءات الألوان", (s, e) => new ColorSpaceVisualizer().ShowDialog());
             AddButton("📂 فتح صورة", (s, e) => OpenImage());
             AddButton("💾 حفظ الصورة", (s, e) => SaveImage());
             AddButton("🔄 إعادة ضبط", (s, e) => ResetImage());
-            //AddButton("🎨 تقليل عدد الألوان", (s, e) => ShowQuantizationDialog());
-            //AddButton("⚪ تدرج رمادي", (s, e) => ApplyEffect(Grayscale));
-            //AddButton("🎞️ نفي (Negative)", (s, e) => ApplyEffect(Negative));
+           
             AddButton("➕ تعديل السطوع", (s, e) => ShowBrightnessDialog());
-            //AddButton("🌀 تمويه (Blur)", (s, e) => ApplyConvolutionFilter(ConvolutionKernel.Blur3x3));
-            //AddButton("✨ حدة (Sharpen)", (s, e) => ApplyConvolutionFilter(ConvolutionKernel.Sharpen3x3));
-            //AddButton("🔍 كشف الحواف", (s, e) => ApplyConvolutionFilter(ConvolutionKernel.EdgeDetect));
+        
             AddButton("🔴 عرض القناة الحمراء", (s, e) => ApplyEffect(RedChannel));
             AddButton("🟢 عرض القناة الخضراء", (s, e) => ApplyEffect(GreenChannel));
             AddButton("🔵 عرض القناة الزرقاء", (s, e) => ApplyEffect(BlueChannel));
-            // أنظمة الألوان
+
             AddButton("🎨 تحويل إلى HSV (Hue/Saturation/Value)", (s, e) => ApplyEffect(RGBtoHSVImage));
             AddButton("🌈 تحويل إلى YUV (Luma+Chroma)", (s, e) => ApplyEffect(RGBtoYUVImage));
             AddButton("🧪 تحويل إلى CIE L*a*b*", (s, e) => ApplyEffect(RGBtoLABImage));
@@ -251,55 +263,6 @@ namespace PixelLab
             pictureBox.DragDrop += (s, e) => this.OnDragDrop(e);
         }
 
-
-        //private void ShowQuantizationDialog()
-        //{
-        //    if (currentBitmap == null) return;
-        //    using (Form dialog = new Form())
-        //    {
-        //        dialog.Text = "تقليل عدد الألوان";
-        //        dialog.Size = new Size(300, 150);
-        //        dialog.StartPosition = FormStartPosition.CenterParent;
-        //        dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
-        //        dialog.MaximizeBox = false;
-        //        dialog.MinimizeBox = false;
-
-        //        Label lbl = new Label { Text = "عدد الألوان المطلوب:", Location = new Point(20, 20), AutoSize = true };
-        //        NumericUpDown numColors = new NumericUpDown { Minimum = 2, Maximum = 256, Value = 16, Location = new Point(150, 18), Width = 60 };
-        //        Button btnOk = new Button { Text = "تطبيق", DialogResult = DialogResult.OK, Location = new Point(100, 70), Size = new Size(80, 30) };
-        //        Button btnCancel = new Button { Text = "إلغاء", DialogResult = DialogResult.Cancel, Location = new Point(190, 70), Size = new Size(80, 30) };
-
-        //        dialog.Controls.Add(lbl);
-        //        dialog.Controls.Add(numColors);
-        //        dialog.Controls.Add(btnOk);
-        //        dialog.Controls.Add(btnCancel);
-
-        //        if (dialog.ShowDialog() == DialogResult.OK)
-        //        {
-        //            int colorCount = (int)numColors.Value;
-        //            Cursor = Cursors.WaitCursor;
-        //            try
-        //            {
-        //                Bitmap quantized = QuantizeImage(currentBitmap, colorCount);
-        //                currentBitmap.Dispose();
-        //                currentBitmap = quantized;
-        //                UpdateImageInfo();
-        //                SetImage(currentBitmap);
-        //                infoLabel.Text = $"تم تقليل الألوان إلى {colorCount} لون";
-        //            }
-        //            catch (Exception ex)
-        //            {
-        //                MessageBox.Show($"خطأ: {ex.Message}");
-        //            }
-        //            finally
-        //            {
-        //                Cursor = Cursors.Default;
-        //            }
-        //        }
-        //    }
-        //}
-
-
         private void UpdateImageInfo()
         {
             if (currentBitmap == null)
@@ -315,56 +278,56 @@ namespace PixelLab
             infoLabel.BackColor = Color.WhiteSmoke;
             infoLabel.Text = info;
         }
-        private Bitmap QuantizeImage(Bitmap src, int colorCount)
-        {
-            colorCount = Math.Min(256, Math.Max(2, colorCount));
-            Dictionary<Color, int> colorFrequency = new Dictionary<Color, int>();
-            for (int y = 0; y < src.Height; y++)
-            {
-                for (int x = 0; x < src.Width; x++)
-                {
-                    Color c = src.GetPixel(x, y);
-                    if (colorFrequency.ContainsKey(c))
-                        colorFrequency[c]++;
-                    else
-                        colorFrequency[c] = 1;
-                }
-            }
-            var sortedColors = colorFrequency.OrderByDescending(kvp => kvp.Value).Take(colorCount).Select(kvp => kvp.Key).ToList();
-            if (sortedColors.Count < colorCount)
-                colorCount = sortedColors.Count;
-            Bitmap dst = new Bitmap(src.Width, src.Height);
-            for (int y = 0; y < src.Height; y++)
-            {
-                for (int x = 0; x < src.Width; x++)
-                {
-                    Color orig = src.GetPixel(x, y);
-                    Color nearest = FindNearestColor(orig, sortedColors);
-                    dst.SetPixel(x, y, nearest);
-                }
-            }
-            return dst;
-        }
+        //private Bitmap QuantizeImage(Bitmap src, int colorCount)
+        //{
+        //    colorCount = Math.Min(256, Math.Max(2, colorCount));
+        //    Dictionary<Color, int> colorFrequency = new Dictionary<Color, int>();
+        //    for (int y = 0; y < src.Height; y++)
+        //    {
+        //        for (int x = 0; x < src.Width; x++)
+        //        {
+        //            Color c = src.GetPixel(x, y);
+        //            if (colorFrequency.ContainsKey(c))
+        //                colorFrequency[c]++;
+        //            else
+        //                colorFrequency[c] = 1;
+        //        }
+        //    }
+        //    var sortedColors = colorFrequency.OrderByDescending(kvp => kvp.Value).Take(colorCount).Select(kvp => kvp.Key).ToList();
+        //    if (sortedColors.Count < colorCount)
+        //        colorCount = sortedColors.Count;
+        //    Bitmap dst = new Bitmap(src.Width, src.Height);
+        //    for (int y = 0; y < src.Height; y++)
+        //    {
+        //        for (int x = 0; x < src.Width; x++)
+        //        {
+        //            Color orig = src.GetPixel(x, y);
+        //            Color nearest = FindNearestColor(orig, sortedColors);
+        //            dst.SetPixel(x, y, nearest);
+        //        }
+        //    }
+        //    return dst;
+        //}
 
-        private Color FindNearestColor(Color target, List<Color> palette)
-        {
-            Color nearest = palette[0];
-            int minDist = int.MaxValue;
-            foreach (Color c in palette)
-            {
-                int dr = target.R - c.R;
-                int dg = target.G - c.G;
-                int db = target.B - c.B;
-                int dist = dr * dr + dg * dg + db * db;
-                if (dist < minDist)
-                {
-                    minDist = dist;
-                    nearest = c;
-                    if (dist == 0) break;
-                }
-            }
-            return nearest;
-        }
+        //private Color FindNearestColor(Color target, List<Color> palette)
+        //{
+        //    Color nearest = palette[0];
+        //    int minDist = int.MaxValue;
+        //    foreach (Color c in palette)
+        //    {
+        //        int dr = target.R - c.R;
+        //        int dg = target.G - c.G;
+        //        int db = target.B - c.B;
+        //        int dist = dr * dr + dg * dg + db * db;
+        //        if (dist < minDist)
+        //        {
+        //            minDist = dist;
+        //            nearest = c;
+        //            if (dist == 0) break;
+        //        }
+        //    }
+        //    return nearest;
+        //}
         private bool IsImageFile(string path)
         {
             string ext = Path.GetExtension(path).ToLower();
@@ -420,7 +383,6 @@ namespace PixelLab
                 sfd.Filter = "PNG Image|*.png|JPEG Image|*.jpg|Bitmap Image|*.bmp";
                 if (sfd.ShowDialog() == DialogResult.OK)
                 {
-                    //currentBitmap.Save(sfd.FileName, GetImageFormat(sfd.FilterIndex));
                     MessageBox.Show("تم حفظ الصورة بنجاح.", "PixelLab", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     currentFileName = Path.GetFileName(sfd.FileName);
                     FileInfo fi = new FileInfo(sfd.FileName);
@@ -436,16 +398,8 @@ namespace PixelLab
             currentBitmap = new Bitmap(originalBitmap);
             SetImage(currentBitmap);
             UpdateImageInfo();
-            //UpdateInfoLabel("تمت الإعادة إلى الأصل");
             infoLabel.Text = "تمت الإعادة إلى الأصل";
 
-
-            //if (originalBitmap != null)
-            //{
-            //    originalBitmap = new Bitmap(currentBitmap); // استعادة
-            //    ExtractChannelsFromOriginal();
-            //    RebuildImageFromChannels();
-            //}
         }
 
         private void ApplyEffect(Func<Bitmap, Bitmap> effect)
@@ -503,26 +457,24 @@ namespace PixelLab
         private Bitmap AdjustBrightness(Bitmap src, int brightness)
         {
 
-            if (brightness==0)  {
-
-                //return currentBitmap;
-                //return originalBitmap;
+            if (brightness==0)  
                 return new Bitmap(src);
-            }
+            
             Bitmap bmp = new Bitmap(src.Width, src.Height);
             for (int y = 0; y < src.Height; y++)
             {
                 for (int x = 0; x < src.Width; x++)
                 {
                     Color c = src.GetPixel(x, y);
-                    int r = Clamp(c.R + brightness);
-                    int g = Clamp(c.G + brightness);
-                    int b = Clamp(c.B + brightness);
+                    int r = Math.Max(0, Math.Min(255, c.R + brightness));
+                    int g = Math.Max(0, Math.Min(255, c.G + brightness));
+                    int b = Math.Max(0, Math.Min(255, c.B + brightness));
                     bmp.SetPixel(x, y, Color.FromArgb(r, g, b));
                 }
             }
             return bmp;
         }
+
 
         private void ShowBrightnessDialog()
         {
@@ -536,16 +488,13 @@ namespace PixelLab
                 Button btnOk = new Button { Text = "تطبيق", DialogResult = DialogResult.OK, Dock = DockStyle.Bottom };
                 dialog.Controls.Add(track);
                 dialog.Controls.Add(btnOk);
-                //dialog.ShowDialog();
-                //track.ValueChanged += (s, e) => ApplyEffect(bmp => AdjustBrightness(bmp, track.Value));
+
                 if (dialog.ShowDialog() == DialogResult.OK)
                     ApplyEffect(bmp => AdjustBrightness(bmp, track.Value));
             }
         }
 
-        private int Clamp(int value) => Math.Max(0, Math.Min(255, value));
 
-        // ---------- قنوات الألوان ----------
         private Bitmap RedChannel(Bitmap src)
         {
             Bitmap bmp = new Bitmap(src.Width, src.Height);
@@ -582,83 +531,9 @@ namespace PixelLab
             return bmp;
         }
 
-        // ---------- مرشحات الالتفاف (Convolution) ----------
-        //private void ApplyConvolutionFilter(float[,] kernel)
-        //{
-        //    if (currentBitmap == null) return;
-        //    Cursor = Cursors.WaitCursor;
-        //    try
-        //    {
-        //        Bitmap result = Convolve(currentBitmap, kernel);
-        //        currentBitmap.Dispose();
-        //        currentBitmap = result;
-        //        SetImage(currentBitmap);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        MessageBox.Show($"خطأ في المرشح: {ex.Message}");
-        //    }
-        //    finally { Cursor = Cursors.Default; }
-        //}
-
-        //private Bitmap Convolve(Bitmap src, float[,] kernel)
-        //{
-        //    int kernelSize = kernel.GetLength(0);
-        //    int offset = kernelSize / 2;
-        //    Bitmap bmp = new Bitmap(src.Width, src.Height);
-        //    BitmapData srcData = src.LockBits(new Rectangle(0, 0, src.Width, src.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        //    BitmapData dstData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-
-        //    unsafe
-        //    {
-        //        byte* srcPtr = (byte*)srcData.Scan0;
-        //        byte* dstPtr = (byte*)dstData.Scan0;
-        //        int stride = srcData.Stride;
-
-        //        for (int y = 0; y < src.Height; y++)
-        //        {
-        //            for (int x = 0; x < src.Width; x++)
-        //            {
-        //                float r = 0, g = 0, b = 0;
-        //                for (int ky = -offset; ky <= offset; ky++)
-        //                {
-        //                    for (int kx = -offset; kx <= offset; kx++)
-        //                    {
-        //                        int ix = x + kx;
-        //                        int iy = y + ky;
-        //                        if (ix >= 0 && ix < src.Width && iy >= 0 && iy < src.Height)
-        //                        {
-        //                            byte* pixel = srcPtr + iy * stride + ix * 4;
-        //                            float weight = kernel[ky + offset, kx + offset];
-        //                            r += pixel[2] * weight;
-        //                            g += pixel[1] * weight;
-        //                            b += pixel[0] * weight;
-        //                        }
-        //                    }
-        //                }
-        //                byte* dstPixel = dstPtr + y * stride + x * 4;
-        //                dstPixel[2] = ClampByte((int)r);
-        //                dstPixel[1] = ClampByte((int)g);
-        //                dstPixel[0] = ClampByte((int)b);
-        //                dstPixel[3] = 255;
-        //            }
-        //        }
-        //    }
-        //    src.UnlockBits(srcData);
-        //    bmp.UnlockBits(dstData);
-        //    return bmp;
-        //}
-
+      
         private byte ClampByte(int val) => (byte)Math.Max(0, Math.Min(255, val));
-        // أنوية المرشحات
-        //private static class ConvolutionKernel
-        //{
-        //    public static float[,] Blur3x3 => new float[,] { { 1 / 9f, 1 / 9f, 1 / 9f }, { 1 / 9f, 1 / 9f, 1 / 9f }, { 1 / 9f, 1 / 9f, 1 / 9f } };
-        //    public static float[,] Sharpen3x3 => new float[,] { { 0, -1, 0 }, { -1, 5, -1 }, { 0, -1, 0 } };
-        //    public static float[,] EdgeDetect => new float[,] { { -1, -1, -1 }, { -1, 8, -1 }, { -1, -1, -1 } };
-        //}
-
-        // ---------- تفاعل الماوس (إظهار قيمة البكسل) ----------
+    
         private void PictureBox_MouseMove(object sender, MouseEventArgs e)
         {
             if (currentBitmap == null)
@@ -680,8 +555,6 @@ namespace PixelLab
         }
 
       
-
-
         // -------------------- تحويلات أنظمة الألوان --------------------
 
         // HSV: Hue (0-360) -> Red, Saturation (0-1) -> Green, Value (0-1) -> Blue
@@ -820,24 +693,6 @@ namespace PixelLab
             return dst;
         }
 
-
-
-
-
-
-
-
-        //private void ColorSpaceCombo_SelectedIndexChanged(object sender, EventArgs e)
-        //{
-        //    currentColorSpace = (ColorSpace)colorSpaceCombo.SelectedIndex;
-        //    UpdateChannelVisibility();
-        //    if (originalBitmap != null)
-        //    {
-        //        ExtractChannelsFromOriginal(); // استخراج قنوات الصورة الأصلية في الفضاء الجديد
-        //        RebuildImageFromChannels(); // إعادة بناء الصورة بناءً على القنوات الجديدة
-        //    }
-        //}
-
         private void ColorSpaceCombo_SelectedIndexChanged(object sender, EventArgs e)
         {
             currentColorSpace = (ColorSpace)colorSpaceCombo.SelectedIndex;
@@ -847,9 +702,9 @@ namespace PixelLab
                 Cursor = Cursors.WaitCursor;
                 try
                 {
-                    ExtractChannelsFromOriginal();   // استخراج القنوات من الصورة الحالية
-                    RebuildImageFromChannels();      // إعادة بناء الصورة حسب الفضاء الجديد
-                    pictureBox.Refresh();            // تحديث العرض
+                    ExtractChannelsFromOriginal();
+                    //RebuildImageFromChannels();     
+                    //pictureBox.Refresh();           
                 }
                 finally
                 {
@@ -858,92 +713,59 @@ namespace PixelLab
             }
         }
 
-        private void UpdateChannelVisibility()
-        {
-            channelCount = (currentColorSpace == ColorSpace.CMYK || currentColorSpace == ColorSpace.LAB) ? 4 : 3;
-            for (int i = 0; i < 5; i++)
-            {
-                bool visible = i < channelCount;
-                channelLabels[i].Visible = visible;
-                channelSliders[i].Visible = visible;
-                channelValues[i].Visible = visible;
-                disableButtons[i].Visible = visible;
-                showChannelOnlyCheckBoxes[i].Visible = visible;
-            }
-            // تحديث تسميات القنوات حسب الفضاء
-            string[] names = GetChannelNames();
-            for (int i = 0; i < channelCount; i++)
-                channelLabels[i].Text = names[i] + ":";
-        }
-
-        private string[] GetChannelNames()
-        {
-            switch (currentColorSpace)
-            {
-                case ColorSpace.RGB: return new[] { "الأحمر (R)", "الأخضر (G)", "الأزرق (B)" };
-                case ColorSpace.HSV: return new[] { "Hue (صبغة)", "Saturation (تشبع)", "Value (قيمة)" };
-                case ColorSpace.YUV: return new[] { "Y (لومينانس)", "U (كرومينانس)", "V (كرومينانس)" };
-                case ColorSpace.YCbCr: return new[] { "Y (لومينانس)", "Cb (فرق الأزرق)", "Cr (فرق الأحمر)" };
-                case ColorSpace.LAB: return new[] { "L* (إضاءة)", "a* (أخضر-أحمر)", "b* (أزرق-أصفر)", "اختياري" };
-                case ColorSpace.CMYK: return new[] { "C (سيان)", "M (ماجنتا)", "Y (أصفر)", "K (أسود)" };
-                default: return new[] { "قناة 1", "قناة 2", "قناة 3" };
-            }
-        }
-
-        //private void ExtractChannelsFromOriginal()
-        //{
-        //    if (originalBitmap == null) return;
-        //    int w = originalBitmap.Width, h = originalBitmap.Height;
-        //    currentChannels = new double[w, h, channelCount];
-        //    for (int y = 0; y < h; y++)
-        //    {
-        //        for (int x = 0; x < w; x++)
-        //        {
-        //            Color c = originalBitmap.GetPixel(x, y);
-        //            double[] channels = ColorToChannels(c, currentColorSpace);
-        //            for (int ch = 0; ch < channelCount; ch++)
-        //                currentChannels[x, y, ch] = channels[ch];
-        //        }
-        //    }
-        //    // إعادة ضبط التعديلات
-        //    for (int i = 0; i < channelCount; i++)
-        //    {
-        //        channelMultipliers[i] = 1.0f;
-        //        channelDisabled[i] = false;
-        //        showChannelOnly[i] = false;
-        //        disableButtons[i].Text = "تعطيل";
-        //        disableButtons[i].BackColor = Color.DarkRed;
-        //        showChannelOnlyCheckBoxes[i].Checked = false;
-        //        // تعيين قيم الشرائح بناءً على متوسط القناة أو قيمة افتراضية
-        //        channelSliders[i].Value = 128;
-        //        channelValues[i].Value = 128;
-        //    }
-        //}
-
         private void ExtractChannelsFromOriginal()
         {
             if (currentBitmap == null) return;
             int w = currentBitmap.Width, h = currentBitmap.Height;
-            int expectedChannels = channelCount;  // عدد القنوات المطلوب حسب الفضاء الحالي
+            int expectedChannels = channelCount;
             currentChannels = new double[w, h, expectedChannels];
 
-            for (int y = 0; y < h; y++)
-            {
-                for (int x = 0; x < w; x++)
-                {
-                    Color c = currentBitmap.GetPixel(x, y);
-                    double[] channels = ColorToChannels(c, currentColorSpace);
+            // قفل بيانات الصورة للقراءة السريعة
+            System.Drawing.Imaging.BitmapData bmpData = currentBitmap.LockBits(
+                new Rectangle(0, 0, w, h),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                currentBitmap.PixelFormat);
 
-                    // إذا كان عدد القنوات أقل من المطلوب، نكمل بالصفر
-                    for (int ch = 0; ch < expectedChannels; ch++)
+            unsafe
+            {
+                byte* ptr = (byte*)bmpData.Scan0;
+                int bytesPerPixel = System.Drawing.Image.GetPixelFormatSize(currentBitmap.PixelFormat) / 8;
+
+                for (int y = 0; y < h; y++)
+                {
+                    byte* row = ptr + y * bmpData.Stride;
+                    for (int x = 0; x < w; x++)
                     {
-                        if (ch < channels.Length)
-                            currentChannels[x, y, ch] = channels[ch];
-                        else
-                            currentChannels[x, y, ch] = 0;  // قيمة افتراضية للقنوات الإضافية
+                        // استخراج قيم RGB حسب تنسيق البكسل (افتراضاً Format32bppArgb أو Format24bppRgb)
+                        byte blue, green, red;
+                        if (bytesPerPixel == 4)
+                        {
+                            blue = row[x * 4];
+                            green = row[x * 4 + 1];
+                            red = row[x * 4 + 2];
+                            // alpha = row[x * 4 + 3]; // غير مستخدم
+                        }
+                        else // 24bpp
+                        {
+                            blue = row[x * 3];
+                            green = row[x * 3 + 1];
+                            red = row[x * 3 + 2];
+                        }
+
+                        Color c = Color.FromArgb(red, green, blue);
+                        double[] channels = ColorToChannels(c, currentColorSpace);
+
+                        for (int ch = 0; ch < expectedChannels; ch++)
+                        {
+                            if (ch < channels.Length)
+                                currentChannels[x, y, ch] = channels[ch];
+                            else
+                                currentChannels[x, y, ch] = 0;
+                        }
                     }
                 }
             }
+            currentBitmap.UnlockBits(bmpData);
 
             // إعادة ضبط التعديلات
             for (int i = 0; i < channelCount; i++)
@@ -958,14 +780,6 @@ namespace PixelLab
                 channelValues[i].Value = 128;
             }
         }
-
-
-
-
-
-
-
-
 
 
         private double[] ColorToChannels(Color c, ColorSpace space)
@@ -1013,9 +827,6 @@ namespace PixelLab
         }
 
 
-
-
-
         private double[] RGBtoLABArray(double R, double G, double B)
         {
             double r = R / 255.0, g = G / 255.0, b = B / 255.0;
@@ -1038,19 +849,6 @@ namespace PixelLab
             return new double[] { Ln, an, bn, 0 };
         }
 
-        //private void UpdateChannelFromSlider(int idx)
-        //{
-        //    if (idx >= channelValues.Length) return;
-        //    channelValues[idx].Value = channelSliders[idx].Value;
-        //        RebuildImageFromChannels();
-        //}
-
-        //private void UpdateChannelFromNumeric(int idx)
-        //{
-        //    channelSliders[idx].Value = (int)channelValues[idx].Value;
-        //  //  if (applyButton.Enabled)
-        //        RebuildImageFromChannels();
-        //}
 
         private void ToggleChannelDisable(int idx)
         {
@@ -1203,7 +1001,7 @@ namespace PixelLab
 
         private Color LABtoRGB(double L, double a, double b)
         {
-            // التحويل من LAB إلى XYZ ثم إلى RGB (مرجع D65)
+            // التحويل من LAB إلى XYZ ثم إلى RGB 
             double y = (L + 16) / 116.0;
             double x = a / 500.0 + y;
             double z = y - b / 200.0;
@@ -1212,6 +1010,7 @@ namespace PixelLab
             xyz[0] = fInv(x) * 0.95047;
             xyz[1] = fInv(y) * 1.00000;
             xyz[2] = fInv(z) * 1.08883;
+
             // XYZ to RGB (sRGB)
             double r = xyz[0] * 3.2404542 + xyz[1] * -1.5371385 + xyz[2] * -0.4985314;
             double g = xyz[0] * -0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
@@ -1222,7 +1021,6 @@ namespace PixelLab
             return Color.FromArgb(ClampByte((int)(r * 255)), ClampByte((int)(g * 255)), ClampByte((int)(b_ * 255)));
         }
 
-        //private double Clamp(double val, double min, double max) => Math.Max(min, Math.Min(max, val));
 
 
 
