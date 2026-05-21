@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace PixelLab
@@ -47,7 +49,9 @@ namespace PixelLab
         private int channelCount = 3;
         private bool[] channelDisabled;
         private bool[] showChannelOnly;
-        private float[] channelMultipliers; 
+        private float[] channelMultipliers;
+
+        private CancellationTokenSource extractionCts;
         public Form2()
         {
             InitializeComponent();
@@ -693,91 +697,119 @@ namespace PixelLab
             return dst;
         }
 
-        private void ColorSpaceCombo_SelectedIndexChanged(object sender, EventArgs e)
+        private async void ColorSpaceCombo_SelectedIndexChanged(object sender, EventArgs e)
         {
+            if (currentBitmap == null) return;
+
+            extractionCts?.Cancel();
+            extractionCts = new CancellationTokenSource();
+            var token = extractionCts.Token;
+
             currentColorSpace = (ColorSpace)colorSpaceCombo.SelectedIndex;
             UpdateChannelVisibility();
-            if (currentBitmap != null)
+
+            colorSpaceCombo.Enabled = false;
+            Cursor = Cursors.WaitCursor;
+
+            try
             {
-                Cursor = Cursors.WaitCursor;
-                try
+                await Task.Run(() => ExtractChannelsFromOriginal(token), token);
+
+                if (!token.IsCancellationRequested)
                 {
-                    ExtractChannelsFromOriginal();
-                    //RebuildImageFromChannels();     
-                    //pictureBox.Refresh();           
-                }
-                finally
-                {
-                    Cursor = Cursors.Default;
+                    RebuildImageFromChannels();
                 }
             }
+            
+            finally
+            {
+                colorSpaceCombo.Enabled = true;
+                Cursor = Cursors.Default;
+                extractionCts = null;
+            }
         }
-
-        private void ExtractChannelsFromOriginal()
+        private void ExtractChannelsFromOriginal(CancellationToken token = default)
         {
             if (currentBitmap == null) return;
             int w = currentBitmap.Width, h = currentBitmap.Height;
             int expectedChannels = channelCount;
-            currentChannels = new double[w, h, expectedChannels];
+            var tempChannels = new double[w, h, expectedChannels]; 
 
-            // قفل بيانات الصورة للقراءة السريعة
-            System.Drawing.Imaging.BitmapData bmpData = currentBitmap.LockBits(
+            BitmapData bmpData = currentBitmap.LockBits(
                 new Rectangle(0, 0, w, h),
-                System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                ImageLockMode.ReadOnly,
                 currentBitmap.PixelFormat);
 
             unsafe
             {
                 byte* ptr = (byte*)bmpData.Scan0;
-                int bytesPerPixel = System.Drawing.Image.GetPixelFormatSize(currentBitmap.PixelFormat) / 8;
+                int bytesPerPixel = Image.GetPixelFormatSize(currentBitmap.PixelFormat) / 8;
 
                 for (int y = 0; y < h; y++)
                 {
+                    if (token.IsCancellationRequested) break;
                     byte* row = ptr + y * bmpData.Stride;
                     for (int x = 0; x < w; x++)
                     {
-                        // استخراج قيم RGB حسب تنسيق البكسل (افتراضاً Format32bppArgb أو Format24bppRgb)
+                        if (token.IsCancellationRequested) break;
                         byte blue, green, red;
                         if (bytesPerPixel == 4)
                         {
                             blue = row[x * 4];
                             green = row[x * 4 + 1];
                             red = row[x * 4 + 2];
-                            // alpha = row[x * 4 + 3]; // غير مستخدم
                         }
-                        else // 24bpp
+                        else
                         {
                             blue = row[x * 3];
                             green = row[x * 3 + 1];
                             red = row[x * 3 + 2];
                         }
-
                         Color c = Color.FromArgb(red, green, blue);
                         double[] channels = ColorToChannels(c, currentColorSpace);
-
                         for (int ch = 0; ch < expectedChannels; ch++)
                         {
-                            if (ch < channels.Length)
-                                currentChannels[x, y, ch] = channels[ch];
-                            else
-                                currentChannels[x, y, ch] = 0;
+                            tempChannels[x, y, ch] = (ch < channels.Length) ? channels[ch] : 0;
                         }
                     }
                 }
             }
             currentBitmap.UnlockBits(bmpData);
 
-            // إعادة ضبط التعديلات
-            for (int i = 0; i < channelCount; i++)
+            if (token.IsCancellationRequested) return;
+
+            currentChannels = tempChannels;
+
+            if (this.InvokeRequired)
             {
-                channelMultipliers[i] = 1.0f;
-                channelDisabled[i] = false;
-                showChannelOnly[i] = false;
-                disableButtons[i].Text = "تعطيل";
-                disableButtons[i].BackColor = Color.DarkRed;
-                showChannelOnlyCheckBoxes[i].Checked = false;
-                channelSliders[i].Value = 128;
-                channelValues[i].Value = 128;
+                this.Invoke(new Action(() =>
+                {
+                    for (int i = 0; i < channelCount; i++)
+                    {
+                        channelMultipliers[i] = 1.0f;
+                        channelDisabled[i] = false;
+                        showChannelOnly[i] = false;
+                        disableButtons[i].Text = "تعطيل";
+                        disableButtons[i].BackColor = Color.DarkRed;
+                        showChannelOnlyCheckBoxes[i].Checked = false;
+                        channelSliders[i].Value = 128;
+                        channelValues[i].Value = 128;
+                    }
+                }));
+            }
+            else
+            {
+                for (int i = 0; i < channelCount; i++)
+                {
+                    channelMultipliers[i] = 1.0f;
+                    channelDisabled[i] = false;
+                    showChannelOnly[i] = false;
+                    disableButtons[i].Text = "تعطيل";
+                    disableButtons[i].BackColor = Color.DarkRed;
+                    showChannelOnlyCheckBoxes[i].Checked = false;
+                    channelSliders[i].Value = 128;
+                    channelValues[i].Value = 128;
+                }
             }
         }
 
@@ -825,7 +857,6 @@ namespace PixelLab
                 default: return new[] { R, G, B };
             }
         }
-
 
         private double[] RGBtoLABArray(double R, double G, double B)
         {
